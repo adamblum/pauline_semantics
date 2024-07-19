@@ -110,7 +110,7 @@ def get_verse(uuid):
     verse=get['Verse'][0]
     if verse: 
         print(f"Returned verse {verse}")
-        return verse['book'],verse['chapter'],verse['verse']
+        return verse['book'],verse['chapter'],verse['verse'],verse["text"]
     else:
         print(f"Can't find verse {id}")
         return None
@@ -247,8 +247,8 @@ try:
         distance_matrix = np.load(distance_matrix_file)
         end_time = time.time()
         elapsed_time = end_time - start_time
-        if distance_matrix.shape!=len(all_verses):
-            print(f"Stored distance matrix is wrong dimensionality")
+        if distance_matrix.shape!=(len(all_verses),len(all_verses)):
+            print(f"Stored distance matrix is wrong dimensionality: {distance_matrix.shape}")
             exit()  
         print(f"Loaded existing matrix with dimensionality {distance_matrix.shape}. Elapsed time {elapsed_time:.2f} seconds")
     else: 
