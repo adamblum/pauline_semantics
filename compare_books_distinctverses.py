@@ -226,8 +226,8 @@ else:
     exit()
 
 if len(sys.argv)>=3:
-    print("For most distinctive verses in target book: {target_book}")
     target_book = sys.argv[2]
+    print(f"For most distinctive verses in target book: {target_book}")
 else:
     print(f"Target book is required")
     exit()
@@ -243,11 +243,14 @@ try:
     print(f"Elapsed time for getting all {len(all_verses)} verses: {elapsed_time:.2f} seconds")
     if os.path.isfile(distance_matrix_file):
         start_time = time.time()
-        print(f"Loading existing distances matrix... ")
+        print(f"Loading existing distance matrix... ")
         distance_matrix = np.load(distance_matrix_file)
         end_time = time.time()
-        elapsed_time = end_time - start_time  
-        print(f"Elapsed time for loading distance matrix: {elapsed_time:.2f} seconds")
+        elapsed_time = end_time - start_time
+        if distance_matrix.shape!=len(all_verses):
+            print(f"Stored distance matrix is wrong dimensionality")
+            exit()  
+        print(f"Loaded existing matrix with dimensionality {distance_matrix.shape}. Elapsed time {elapsed_time:.2f} seconds")
     else: 
         start_time = time.time()
         all_vectors = get_vectors(all_verses)
