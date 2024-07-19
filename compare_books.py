@@ -27,9 +27,9 @@ def find_similar(client,uuid,target_book,source_book=None,chapter=None,verse=Non
     response = coll.query.near_object(
                 near_object=obj_uuid,
                 limit=5,
-                distance=0.12,
+                distance=0.15,
                 return_metadata=MetadataQuery(distance=True),
-                filters=(Filter.by_property("book").equal(target)&Filter.by_property("source").equal(source))
+                filters=(Filter.by_property("book").equal(target_book)&Filter.by_property("source").equal(source))
         )
     print(f"\n\nSearch target: {verse.properties}\n------------")
     print(f"\nResults:\n------------")
