@@ -17,7 +17,7 @@ import numpy as np
 import scipy 
 from scipy.spatial.distance import cosine
 import time 
-import timeit
+import csv 
 
 def cosine_distance(v1, v2):
     #print(f"Computing distance between {v1[0:10]} and {v2[0:10]}")
@@ -41,6 +41,25 @@ def get_verses(client,book,source_bible="NKJV"):
     result=response.objects
     return result 
 
+# List of books in the correct order
+books_order = [
+    'Genesis', 'Exodus', 'Leviticus', 'Numbers', 'Deuteronomy',
+    'Joshua', 'Judges', 'Ruth', '1 Samuel', '2 Samuel', '1 Kings', '2 Kings',
+    '1 Chronicles', '2 Chronicles', 'Ezra', 'Nehemiah', 'Esther', 'Job',
+    'Psalms', 'Proverbs', 'Ecclesiastes', 'Song of Solomon', 'Isaiah',
+    'Jeremiah', 'Lamentations', 'Ezekiel', 'Daniel', 'Hosea', 'Joel', 'Amos',
+    'Obadiah', 'Jonah', 'Micah', 'Nahum', 'Habakkuk', 'Zephaniah', 'Haggai',
+    'Zechariah', 'Malachi', 'Matthew', 'Mark', 'Luke', 'John', 'Acts', 'Romans',
+    '1 Corinthians', '2 Corinthians', 'Galatians', 'Ephesians', 'Philippians',
+    'Colossians', '1 Thessalonians', '2 Thessalonians', '1 Timothy', '2 Timothy',
+    'Titus', 'Philemon', 'Hebrews', 'James', '1 Peter', '2 Peter', '1 John',
+    '2 John', '3 John', 'Jude', 'Revelation'
+]
+
+# Function to get the index of a book in the books_order list
+def get_book_index(book):
+    return books_order.index(book)
+
 def get_all_verses(client,source_bible="NKJV"):
     coll = client.collections.get("Verse")
     response = coll.query.fetch_objects(
@@ -48,8 +67,8 @@ def get_all_verses(client,source_bible="NKJV"):
         limit = 100000,
         include_vector=False
     )
-    result=response.objects
-    return result 
+    sorted_verses = sorted(response.objects, key=lambda x: (get_book_index(x.properties["book"]), x.properties["chapter"], x.properties["verse"]))
+    return sorted_verses
 
 def top_10_percent_subhash(input_dict):
     # Sort the dictionary by values in descending order
@@ -126,15 +145,15 @@ def compute_distinctness(row,num_cols,distance_matrix):
     return result 
 
 # go through the hash of verse IDs with  their distinctness scores an
-# find the closest match in the target book for each one
+# find the closest match in the source book for each one
 # return each of the closest match verses and the distances in an array of hashes [{"verse","closematch","distance"}]
 def find_closest_matches(client,verses,source_book,source_bible="NKJV"):
     print(f"Finding closest matches in source book {source_book} for all distinctive verses from target book.")
     start=time.time()
     verse_matches=[]
-    target_verses = client.collections.get("Verse")
+    source_verses = client.collections.get("Verse")
     for verse_id in verses.keys():
-        response = target_verses.query.near_object(
+        response = source_verses.query.near_object(
             near_object=verse_id,
             limit=1,
             return_metadata=MetadataQuery(distance=True),
@@ -155,9 +174,8 @@ def save_matches(filename,matches):
     with open(filename, "w+") as file:
         for m in matches: 
             target_book,target_chapter,target_verse,target_text=get_verse(m["verse"])
-            source_book,source_chapter,source_verse,source_text=m["closematch"].properties['book'],m["closematch"].properties['chapter'],m["closematch"].properties['verse'],m["closematch"].properties["text"]
-            file.write(target_book+","+target_chapter+","+target_verse+","+target_text+ \
-                       ","+source_book+","+source_chapter+","+source_verse+","+source_text+","+m.metadata["distance"]+"\n")
+            source_book,source_chapter,source_verse,source_text=m["closematch"]['book'],m["closematch"]['chapter'],m["closematch"]['verse'],m["closematch"]["text"]
+            file.write(target_book+","+target_chapter+","+target_verse+","+target_text+ ","+source_book+","+source_chapter+","+source_verse+","+source_text+","+str(m["distance"])+"\n")
   
 # return hash of verse IDs and their vectors
 def get_vectors(verses):
@@ -207,6 +225,21 @@ def verse_number(verse,verses):
         num += 1
     num = -1 # not found
     return num
+
+# given a hash of verse IDs plus the distinct scores, saved to a CSV with book,chapter,verse,score
+def save_distinct_scores(csv_file_name,data):
+    # Open the CSV file for writing
+    with open(csv_file_name, mode='w', newline='') as file:
+        writer = csv.writer(file)
+        
+        # Write the header
+        writer.writerow(['Verse ID', 'Book','Chapter','Verse','Text','Score'])
+        
+        # Write the data
+        for verse_id, score in data.items():
+            book,chapter,verse,text = get_verse(verse_id)
+            writer.writerow([verse_id, book,chapter,verse,text,score])
+
 
 WEAVIATE_SERVER=os.environ['WEAVIATE_CLUSTER']
 source_bible="NKJV"
@@ -287,7 +320,7 @@ try:
     end_time = time.time()
     elapsed_time = end_time - start_time  # Calculate elapsed time
     print(f"Found most distinct verses in target book {target_book}. Elapsed time: {elapsed_time:.2f} seconds")
-    #print(f"Most distinctive verses {most_distinct}")
+    save_distinct_scores(most_distinct)
 
     # now find the closest matches for each of the distinct verses in the target book in the source book
     closest_matches=find_closest_matches(client,most_distinct,source_book,source_bible)
