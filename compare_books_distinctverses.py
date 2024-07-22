@@ -213,7 +213,7 @@ def compute_distance_matrix(vectors):
             distance_matrix[j, i] = distance
     end = time.time()
     elapsed_time = end - start
-    print("Computed distance matrix in {elapsed_time} seconds")
+    print(f"Computed distance matrix in {elapsed_time} seconds")
     return distance_matrix
 
 def verse_number(verse,verses):
@@ -287,7 +287,7 @@ try:
     else: 
         start_time = time.time()
         all_vectors = get_vectors(all_verses)
-        _,distance_matrix = compute_distance_matrix(all_vectors)
+        distance_matrix = compute_distance_matrix(all_vectors)
         np.save(distance_matrix_file,distance_matrix)
         end_time = time.time()
         elapsed_time = end_time - start_time  
