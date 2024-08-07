@@ -12,8 +12,10 @@ import sys
 from weaviate.util import generate_uuid5 
 from weaviate.classes.query import MetadataQuery,Filter 
 
+DISTANCE_THRESHOLD=0.15
+
 # find verses from target book that are similar to specified verse
-def find_similar(client,uuid,target_book,source_book=None,chapter=None,verse=None,source="NKJV"):
+def find_similar(client,uuid,target_book,source_book=None,chapter=None,verse=None,source="NKJV",threshold=DISTANCE_THRESHOLD):
     coll = client.collections.get("Verse")
     if uuid == None: 
         obj_uuid = generate_uuid5({"book":source_book,"chapter":chapter,"verse":verse})
@@ -27,7 +29,7 @@ def find_similar(client,uuid,target_book,source_book=None,chapter=None,verse=Non
     response = coll.query.near_object(
                 near_object=obj_uuid,
                 limit=5,
-                distance=0.15,
+                distance=threshold,
                 return_metadata=MetadataQuery(distance=True),
                 filters=(Filter.by_property("book").equal(target_book)&Filter.by_property("source").equal(source))
         )
@@ -66,15 +68,20 @@ else:
     target_book = sys.argv[2]
 
 source="NKJV"
-results_dir = "../analysis/"
+results_dir = "./analysis/"
 if len(sys.argv)>=4:
     source=sys.argv[3]
+
+# only needed for examining non-canonical books
+target_source="NKJV"
+if len(sys.argv)>=5:
+    target_source=sys.argv[4]
 
 try: 
     source_verses = get_verses(client,source_book,source)
     results_file = results_dir + source_book + '-' + target_book + '.csv'
     for v in source_verses: 
-        similar_verses = find_similar(client,v.uuid,target_book,source)
+        similar_verses = find_similar(client,v.uuid,target_book,target_source,DISTANCE_THRESHOLD)
         if similar_verses:
             save_similarity_results(results_file,v,similar_verses)
         else:

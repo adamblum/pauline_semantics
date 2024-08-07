@@ -38,8 +38,8 @@ def get_verses(client,book,source_bible="NKJV"):
         include_vector=True
     )
     #print(f"Response {response}")
-    result=response.objects
-    return result 
+    sorted_verses = sorted(response.objects, key=lambda x: (get_book_index(x.properties["book"]), int(x.properties["chapter"]), int(x.properties["verse"])))
+    return sorted_verses
 
 # List of books in the correct order
 books_order = [
@@ -53,21 +53,24 @@ books_order = [
     '1 Corinthians', '2 Corinthians', 'Galatians', 'Ephesians', 'Philippians',
     'Colossians', '1 Thessalonians', '2 Thessalonians', '1 Timothy', '2 Timothy',
     'Titus', 'Philemon', 'Hebrews', 'James', '1 Peter', '2 Peter', '1 John',
-    '2 John', '3 John', 'Jude', 'Revelation'
+    '2 John', '3 John', 'Jude', 'Revelation','3 Corinthians'
 ]
 
 # Function to get the index of a book in the books_order list
 def get_book_index(book):
     return books_order.index(book)
 
-def get_all_verses(client,source_bible="NKJV"):
+def get_all_verses(client,bible="NKJV"):
+    print(f"Getting all verses from {bible}")
     coll = client.collections.get("Verse")
     response = coll.query.fetch_objects(
-        filters = Filter.by_property("source").equal(source_bible),
+        filters = Filter.by_property("source").equal(bible),
         limit = 100000,
         include_vector=False
     )
-    sorted_verses = sorted(response.objects, key=lambda x: (get_book_index(x.properties["book"]), x.properties["chapter"], x.properties["verse"]))
+    print(f"Number of objects {len(response.objects)}")
+    sorted_verses = sorted(response.objects, key=lambda x: (get_book_index(x.properties["book"]), int(x.properties["chapter"]), int(x.properties["verse"])))
+    print(f"Number of all verses {len(sorted_verses)} ")
     return sorted_verses
 
 def top_10_percent_subhash(input_dict):
@@ -108,7 +111,7 @@ def get_vector(uuid):
 
 def get_verse(uuid):
     # Construct the GraphQL query
-    print(f"Looking for verse UUID {uuid}")
+    #print(f"Looking for verse UUID {uuid}")
     query = f"""
     {{
         Get {{
@@ -128,20 +131,20 @@ def get_verse(uuid):
     get = response.get
     verse=get['Verse'][0]
     if verse: 
-        print(f"Returned verse {verse}")
+        #print(f"Returned verse {verse}")
         return verse['book'],verse['chapter'],verse['verse'],verse["text"]
     else:
-        print(f"Can't find verse {id}")
+        #print(f"Can't find verse {id}")
         return None
 
-def compute_distinctness(row,num_cols,distance_matrix):
-    #print(f"Computing distinctness of row {row}...")
+def compute_distance(row,num_cols,matrix):
+    #print(f"Computing distance of row {row}...")
     result = None
     tot_distance = 0 
     for col in range(num_cols):
-        tot_distance += distance_matrix[row][col]
+        tot_distance += matrix[row][col]
     result = tot_distance/num_cols
-    #print(f"distinctness: {result}")
+    #print(f"distance: {result}")
     return result 
 
 # go through the hash of verse IDs with  their distinctness scores an
@@ -161,7 +164,7 @@ def find_closest_matches(client,verses,source_book,source_bible="NKJV"):
         )
         verse_match = {}
         verse_match["verse"] = verse_id
-        print(f"Closematch {response.objects[0]}")
+        #print(f"Closematch {response.objects[0]}")
         verse_match["closematch"] = response.objects[0].properties
         verse_match["distance"] = response.objects[0].metadata.distance
         verse_matches.append(verse_match)
@@ -170,12 +173,21 @@ def find_closest_matches(client,verses,source_book,source_bible="NKJV"):
     print(f"Found closest matches in {elapsed} seconds")
     return verse_matches
 
-def save_matches(filename,matches):
+def save_matches(filename,matches,most_distinct,complexities):
     with open(filename, "w+") as file:
+        writer = csv.writer(file)
+        # Write the header
+        writer.writerow(['TargetBook','Chapter','Verse','Text','SourceBook','Chapter','Verse','Text','Distance','Distinctness','Complexity'])
+        i = 0
+        tot_distance = 0
         for m in matches: 
             target_book,target_chapter,target_verse,target_text=get_verse(m["verse"])
             source_book,source_chapter,source_verse,source_text=m["closematch"]['book'],m["closematch"]['chapter'],m["closematch"]['verse'],m["closematch"]["text"]
-            file.write(target_book+","+target_chapter+","+target_verse+","+target_text+ ","+source_book+","+source_chapter+","+source_verse+","+source_text+","+str(m["distance"])+"\n")
+            writer.writerow([target_book,target_chapter,target_verse,target_text,source_book,source_chapter,source_verse,source_text,str(m["distance"]),most_distinct[m["verse"]],complexities[m["verse"]]])
+            tot_distance += m["distance"]
+            i += 1
+        avg_distance = tot_distance/len(matches)
+        file.write("AVERAGE:,,,,,,,"+str(avg_distance))
   
 # return hash of verse IDs and their vectors
 def get_vectors(verses):
@@ -216,6 +228,27 @@ def compute_distance_matrix(vectors):
     print(f"Computed distance matrix in {elapsed_time} seconds")
     return distance_matrix
 
+def compute_hetero_matrix(source_vectors,target_vectors):
+    print("Computing heterogeneous (source v. target bible) distance matrix")
+    start = time.time()
+    source_ids = list(source_vectors.keys())
+    num_source_vectors = len(source_ids)
+    target_ids = list(target_vectors.keys())
+    num_target_vectors = len(target_ids)
+
+    distance_matrix = np.zeros((num_source_vectors, num_target_vectors))
+    # Compute cosine distance between each pair of vectors
+    for i in range(num_source_vectors):
+        for j in range(num_target_vectors):  
+            vec_i = source_vectors[source_ids[i]]
+            vec_j = target_vectors[target_ids[j]]
+            distance = cosine(vec_i, vec_j)  
+            distance_matrix[i, j] = distance
+    end = time.time()
+    elapsed_time = end - start
+    print(f"Computed distance matrix in {elapsed_time} seconds")
+    return distance_matrix 
+
 def verse_number(verse,verses):
     print(f"Finding {verse.uuid} in verses")
     num = 0
@@ -227,24 +260,37 @@ def verse_number(verse,verses):
     return num
 
 # given a hash of verse IDs plus the distinct scores, saved to a CSV with book,chapter,verse,score
-def save_distinct_scores(csv_file_name,data):
+def save_distinct_scores(csv_file_name,data,complexities):
     # Open the CSV file for writing
     with open(csv_file_name, mode='w', newline='') as file:
         writer = csv.writer(file)
         
         # Write the header
-        writer.writerow(['Verse ID', 'Book','Chapter','Verse','Text','Score'])
+        writer.writerow(['Verse ID','Book','Chapter','Verse','Text','Score','Complexity'])
         
         # Write the data
         for verse_id, score in data.items():
             book,chapter,verse,text = get_verse(verse_id)
-            writer.writerow([verse_id, book,chapter,verse,text,score])
+            complexity=complexities[verse_id]
+            writer.writerow([verse_id,book,chapter,verse,text,score,complexity])
 
+def verse_string(verse_object):
+    result = verse_object.properties['book'] + ' ' + verse_object.properties['chapter'] + ' ' + verse_object.properties['verse']
+    return result
+
+def normalize_and_scale_complexity(raw_complexity, mean=0.0006505854642018747, std_dev=3.248088534511439e-08, target_mean=5, target_std_dev=2, min_score=0, max_score=10):
+    # Standardize the raw complexity to have a mean of `mean` and std deviation of `std_dev`
+    standardized_complexity = (raw_complexity - mean) / std_dev
+    # Scale to the desired range with a target mean and std deviation
+    scaled_complexity = standardized_complexity * target_std_dev + target_mean
+    # Ensure the value falls within the [min_score, max_score] range
+    final_score = np.clip(scaled_complexity, min_score, max_score)
+    return final_score
 
 WEAVIATE_SERVER=os.environ['WEAVIATE_CLUSTER']
-source_bible="NKJV"
 results_dir = "./analysis/"
-distance_matrix_file = results_dir + "distance_matrix.npy"
+distinct_scores_file = results_dir + "distinct_scores.csv"
+WEIGHT_COMPLEXITY=0.005
 
 client = weaviate.connect_to_wcs(
         cluster_url = WEAVIATE_SERVER,  
@@ -265,42 +311,57 @@ else:
     print(f"Target book is required")
     exit()
 
+source_bible="NKJV"
 if len(sys.argv)>=4:
     source_bible = sys.argv[3]
 
+target_bible = source_bible
+if len(sys.argv)>=5:
+    target_bible = sys.argv[4]
+
+distance_matrix_file = results_dir + source_bible + "-" + target_bible + "_distance_matrix.npy"
+
 try: 
     start_time = time.time()
-    all_verses = get_all_verses(client,source_bible)
+    source_verses = get_all_verses(client,source_bible)
+    num_source_verses = len(source_verses)
+    if source_bible != target_bible:
+        target_verses = get_all_verses(client,target_bible)
+        num_target_verses = len(target_verses)
     end_time = time.time()
     elapsed_time = end_time - start_time 
-    print(f"Elapsed time for getting all {len(all_verses)} verses: {elapsed_time:.2f} seconds")
+    print(f"Elapsed time for getting all verses: {elapsed_time:.2f} seconds")
+
     if os.path.isfile(distance_matrix_file):
         start_time = time.time()
-        print(f"Loading existing distance matrix... ")
+        print(f"Loading existing distance matrix: {distance_matrix_file}... ")
         distance_matrix = np.load(distance_matrix_file)
         end_time = time.time()
         elapsed_time = end_time - start_time
-        if distance_matrix.shape!=(len(all_verses),len(all_verses)):
+        if distance_matrix.shape!=(num_source_verses,num_target_verses):
             print(f"Stored distance matrix is wrong dimensionality: {distance_matrix.shape}")
             exit()  
         print(f"Loaded existing matrix with dimensionality {distance_matrix.shape}. Elapsed time {elapsed_time:.2f} seconds")
     else: 
         start_time = time.time()
-        all_vectors = get_vectors(all_verses)
-        distance_matrix = compute_distance_matrix(all_vectors)
+        source_vectors = get_vectors(source_verses)
+        if source_bible == target_bible:
+            distance_matrix = compute_distance_matrix(source_vectors)
+        else: 
+            target_vectors = get_vectors(target_verses)
+            distance_matrix = compute_hetero_matrix(source_vectors,target_vectors)
+
         np.save(distance_matrix_file,distance_matrix)
         end_time = time.time()
         elapsed_time = end_time - start_time  
-        print(f"Elapsed time for getting vectors, computing distance matrix and saving it: {elapsed_time:.2f} seconds")        
-
+        print(f"Elapsed time for getting vectors, computing distance matrix and saving it: {elapsed_time:.2f} seconds")  
 
     # use this to find the most distinct verses in the specified TARGET book
-    target_verses = get_verses(client,target_book,source_bible)
-    print(f"Target book verses count {len(target_verses)}")
     distinctnesses={}
-    num_verses = len(all_verses)
+    complexities={}
     start_time = time.time()
-    verse_num = verse_number(target_verses[0],all_verses)
+    print(f"First target verse {verse_string(target_verses[0])}")
+    verse_num = verse_number(target_verses[0],target_verses)
     if verse_num < 0:
         print(f"Can't find verse {target_verses[0]}. Stopping.")
         exit()
@@ -310,23 +371,28 @@ try:
 
     start_time = time.time()
     print(f"Finding most distinct verses in target book {target_book}")
-    row = num_verses * verse_num
-    for row in range(num_verses): 
-        v = all_verses[row]
-        distinctness = compute_distinctness(row,num_verses,distance_matrix)
+    for i in range(num_target_verses):
+        v = target_verses[verse_num+i]
+        #print(f"{i}-th verse: {verse_string(v)}") 
+        # compute distinctness as distance + weight_complexity * complexity, 
+        # where complexity measures the variance of the vecctor
+        vector = get_vector(v.uuid)
+        distinctness = compute_distance(verse_num+i,num_source_verses,distance_matrix) 
+        distinctness += WEIGHT_COMPLEXITY * normalize_and_scale_complexity(np.var(vector))
         distinctnesses[v.uuid] = distinctness
-        row += 1 
+        complexities[v.uuid] = normalize_and_scale_complexity(np.var(vector))
+
     most_distinct = top_10_percent_subhash(distinctnesses)
     end_time = time.time()
     elapsed_time = end_time - start_time  # Calculate elapsed time
     print(f"Found most distinct verses in target book {target_book}. Elapsed time: {elapsed_time:.2f} seconds")
-    save_distinct_scores(most_distinct)
+    save_distinct_scores(distinct_scores_file,most_distinct,complexities)
 
     # now find the closest matches for each of the distinct verses in the target book in the source book
     closest_matches=find_closest_matches(client,most_distinct,source_book,source_bible)
     results_file = results_dir + "distinct_verse_from_target_" + target_book + "-close_matches_in_source_" + source_book + ".csv"
     # save them for further analysis: to determine likelihood target was written by author of source
-    save_matches(results_file,closest_matches)
+    save_matches(results_file,closest_matches,most_distinct,complexities)
 finally:
     client.close()
 
