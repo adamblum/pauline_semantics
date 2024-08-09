@@ -138,10 +138,11 @@ def get_verse(uuid):
         return None
 
 def compute_distance(row,num_cols,matrix):
-    #print(f"Computing distance of row {row}...")
+    print(f"Computing distance of row {row}...")
     result = None
     tot_distance = 0 
     for col in range(num_cols):
+        print(f"Add distance for {row},{col}")
         tot_distance += matrix[row][col]
     result = tot_distance/num_cols
     #print(f"distance: {result}")
@@ -238,10 +239,10 @@ def compute_hetero_matrix(source_vectors,target_vectors):
 
     distance_matrix = np.zeros((num_source_vectors, num_target_vectors))
     # Compute cosine distance between each pair of vectors
-    for i in range(num_source_vectors):
-        for j in range(num_target_vectors):  
-            vec_i = source_vectors[source_ids[i]]
-            vec_j = target_vectors[target_ids[j]]
+    for i in range(num_target_vectors):
+        vec_i = target_vectors[target_ids[i]]
+        for j in range(num_source_vectors): 
+            vec_j = source_vectors[source_ids[j]] 
             distance = cosine(vec_i, vec_j)  
             distance_matrix[i, j] = distance
     end = time.time()
@@ -373,10 +374,13 @@ try:
     print(f"Finding most distinct verses in target book {target_book}")
     for i in range(num_target_verses):
         v = target_verses[verse_num+i]
-        #print(f"{i}-th verse: {verse_string(v)}") 
+        print(f"{i}-th verse: {verse_string(v)}") 
         # compute distinctness as distance + weight_complexity * complexity, 
         # where complexity measures the variance of the vecctor
         vector = get_vector(v.uuid)
+        if verse_num+i >= num_target_verses:
+            print(f"Verse {verse_num+i} greater than number of verses {num_target_verses}")
+            break 
         distinctness = compute_distance(verse_num+i,num_source_verses,distance_matrix) 
         distinctness += WEIGHT_COMPLEXITY * normalize_and_scale_complexity(np.var(vector))
         distinctnesses[v.uuid] = distinctness
