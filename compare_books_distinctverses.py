@@ -53,7 +53,7 @@ books_order = [
     '1 Corinthians', '2 Corinthians', 'Galatians', 'Ephesians', 'Philippians',
     'Colossians', '1 Thessalonians', '2 Thessalonians', '1 Timothy', '2 Timothy',
     'Titus', 'Philemon', 'Hebrews', 'James', '1 Peter', '2 Peter', '1 John',
-    '2 John', '3 John', 'Jude', 'Revelation','3 Corinthians'
+    '2 John', '3 John', 'Jude', 'Revelation','3 Corinthians','Laodiceans'
 ]
 
 # Function to get the index of a book in the books_order list
@@ -240,9 +240,9 @@ def compute_hetero_matrix(source_vectors,target_vectors):
     distance_matrix = np.zeros((num_source_vectors, num_target_vectors))
     # Compute cosine distance between each pair of vectors
     for i in range(num_target_vectors):
-        vec_i = target_vectors[target_ids[i]]
+        vec_i = source_vectors[source_ids[i]]
         for j in range(num_source_vectors): 
-            vec_j = source_vectors[source_ids[j]] 
+            vec_j = target_vectors[target_ids[j]] 
             distance = cosine(vec_i, vec_j)  
             distance_matrix[i, j] = distance
     end = time.time()
