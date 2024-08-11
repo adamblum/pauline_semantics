@@ -68,9 +68,8 @@ def get_all_verses(client,bible="NKJV"):
         limit = 100000,
         include_vector=False
     )
-    print(f"Number of objects {len(response.objects)}")
     sorted_verses = sorted(response.objects, key=lambda x: (get_book_index(x.properties["book"]), int(x.properties["chapter"]), int(x.properties["verse"])))
-    print(f"Number of all verses {len(sorted_verses)} ")
+    print(f"Number of all verses: {len(sorted_verses)}")
     return sorted_verses
 
 def top_10_percent_subhash(input_dict):
@@ -137,13 +136,13 @@ def get_verse(uuid):
         #print(f"Can't find verse {id}")
         return None
 
-def compute_distance(row,num_cols,matrix):
-    print(f"Computing distance of row {row}...")
+def compute_distance(row,first_col,num_cols,matrix):
+    #print(f"Computing distance of source row {row}...")
     result = None
     tot_distance = 0 
     for col in range(num_cols):
-        print(f"Add distance for {row},{col}")
-        tot_distance += matrix[row][col]
+        #print(f"Add distance for {row},{col}")
+        tot_distance += matrix[row][col+first_col]
     result = tot_distance/num_cols
     #print(f"distance: {result}")
     return result 
@@ -239,9 +238,9 @@ def compute_hetero_matrix(source_vectors,target_vectors):
 
     distance_matrix = np.zeros((num_source_vectors, num_target_vectors))
     # Compute cosine distance between each pair of vectors
-    for i in range(num_target_vectors):
+    for i in range(num_source_vectors):
         vec_i = source_vectors[source_ids[i]]
-        for j in range(num_source_vectors): 
+        for j in range(num_target_vectors): 
             vec_j = target_vectors[target_ids[j]] 
             distance = cosine(vec_i, vec_j)  
             distance_matrix[i, j] = distance
@@ -324,11 +323,10 @@ distance_matrix_file = results_dir + source_bible + "-" + target_bible + "_dista
 
 try: 
     start_time = time.time()
-    source_verses = get_all_verses(client,source_bible)
-    num_source_verses = len(source_verses)
+    all_source_verses = get_all_verses(client,source_bible)
     if source_bible != target_bible:
-        target_verses = get_all_verses(client,target_bible)
-        num_target_verses = len(target_verses)
+        all_target_verses = get_all_verses(client,target_bible)
+        num_target_verses = len(all_target_verses)
     end_time = time.time()
     elapsed_time = end_time - start_time 
     print(f"Elapsed time for getting all verses: {elapsed_time:.2f} seconds")
@@ -339,17 +337,17 @@ try:
         distance_matrix = np.load(distance_matrix_file)
         end_time = time.time()
         elapsed_time = end_time - start_time
-        if distance_matrix.shape!=(num_source_verses,num_target_verses):
+        if distance_matrix.shape!=(len(all_source_verses),len(all_target_verses)):
             print(f"Stored distance matrix is wrong dimensionality: {distance_matrix.shape}")
             exit()  
         print(f"Loaded existing matrix with dimensionality {distance_matrix.shape}. Elapsed time {elapsed_time:.2f} seconds")
     else: 
         start_time = time.time()
-        source_vectors = get_vectors(source_verses)
+        source_vectors = get_vectors(all_source_verses)
         if source_bible == target_bible:
             distance_matrix = compute_distance_matrix(source_vectors)
         else: 
-            target_vectors = get_vectors(target_verses)
+            target_vectors = get_vectors(all_target_verses)
             distance_matrix = compute_hetero_matrix(source_vectors,target_vectors)
 
         np.save(distance_matrix_file,distance_matrix)
@@ -361,27 +359,35 @@ try:
     distinctnesses={}
     complexities={}
     start_time = time.time()
-    print(f"First target verse {verse_string(target_verses[0])}")
-    verse_num = verse_number(target_verses[0],target_verses)
-    if verse_num < 0:
-        print(f"Can't find verse {target_verses[0]}. Stopping.")
+    source_verses = get_verses(client,source_book,source_bible)
+    num_source_verses = len(source_verses)
+    target_verses = get_verses(client,target_book,target_bible)
+    num_target_verses = len(target_verses)
+    print(f"First source verse {verse_string(source_verses[0])}")
+    source_verse_num = verse_number(source_verses[0],all_source_verses)
+    if source_verse_num < 0:
+        print(f"Can't find source verse {source_verses[0]}. Stopping.")
+        exit()
+    target_verse_num = verse_number(target_verses[0],all_target_verses)
+    if target_verse_num < 0:
+        print(f"Can't find target verse {target_verses[0]}. Stopping.")
         exit()
     end_time = time.time()
     elapsed_time = end_time - start_time  # Calculate elapsed time
-    print(f"Found verse number: {verse_num}. Elapsed time: {elapsed_time:.2f} seconds")
+    print(f"Found verse number: {target_verse_num}. Elapsed time: {elapsed_time:.2f} seconds")
 
     start_time = time.time()
     print(f"Finding most distinct verses in target book {target_book}")
-    for i in range(num_target_verses):
-        v = target_verses[verse_num+i]
-        print(f"{i}-th verse: {verse_string(v)}") 
+    for i in range(num_source_verses):
+        v = source_verses[i]
+        #print(f"{i}-th source verse: {verse_string(v)}") 
         # compute distinctness as distance + weight_complexity * complexity, 
         # where complexity measures the variance of the vecctor
         vector = get_vector(v.uuid)
-        if verse_num+i >= num_target_verses:
-            print(f"Verse {verse_num+i} greater than number of verses {num_target_verses}")
+        if source_verse_num+i >= len(all_source_verses):
+            print(f"Source verse {source_verse_num+i} greater than number of source verses {len(all_source_verses)}")
             break 
-        distinctness = compute_distance(verse_num+i,num_source_verses,distance_matrix) 
+        distinctness = compute_distance(source_verse_num+i,target_verse_num,num_target_verses,distance_matrix) 
         distinctness += WEIGHT_COMPLEXITY * normalize_and_scale_complexity(np.var(vector))
         distinctnesses[v.uuid] = distinctness
         complexities[v.uuid] = normalize_and_scale_complexity(np.var(vector))
