@@ -72,15 +72,15 @@ def get_all_verses(client,bible="NKJV"):
     print(f"Number of all verses: {len(sorted_verses)}")
     return sorted_verses
 
-def top_10_percent_subhash(input_dict):
+def top_20_percent_subhash(input_dict):
     # Sort the dictionary by values in descending order
     sorted_dict = {k: v for k, v in sorted(input_dict.items(), key=lambda item: item[1], reverse=True)}
-    # Calculate the number of elements in the top 10%
+    # Calculate the number of elements in the top 20 percent
     total_values = len(sorted_dict)
-    top_10_percent_threshold = total_values // 10  # 10% of total values 
-    # Create a subhash with the top 10%  values
-    top_10_percent_subhash = {k: v for i, (k, v) in enumerate(sorted_dict.items()) if i < top_10_percent_threshold}  
-    return top_10_percent_subhash
+    top_20_percent_threshold = total_values // 5  # 10% of total values 
+    # Create a subhash with the top 20%  values
+    top_20_percent_subhash = {k: v for i, (k, v) in enumerate(sorted_dict.items()) if i < top_20_percent_threshold}  
+    return top_20_percent_subhash
 
 def get_vector(uuid):
     # Construct the GraphQL query
@@ -136,16 +136,23 @@ def get_verse(uuid):
         #print(f"Can't find verse {id}")
         return None
 
-def compute_distance(row,first_col,num_cols,matrix):
+def compute_distance(col,first_row,num_rows,matrix):
     #print(f"Computing distance of source row {row}...")
     result = None
     tot_distance = 0 
-    for col in range(num_cols):
+    for row in range(num_rows):
         #print(f"Add distance for {row},{col}")
-        tot_distance += matrix[row][col+first_col]
-    result = tot_distance/num_cols
+        tot_distance += matrix[row+first_row][col]
+    result = tot_distance/num_rows
     #print(f"distance: {result}")
     return result 
+
+def isopenorclose(i,numverses):
+    if (i==0) or (i==1):
+        return True
+    if (i==numverses-1) or (i==numverses-2):
+        return True
+    return False
 
 # go through the hash of verse IDs with  their distinctness scores an
 # find the closest match in the source book for each one
@@ -155,6 +162,7 @@ def find_closest_matches(client,verses,source_book,source_bible="NKJV"):
     start=time.time()
     verse_matches=[]
     source_verses = client.collections.get("Verse")
+    num = 0
     for verse_id in verses.keys():
         response = source_verses.query.near_object(
             near_object=verse_id,
@@ -326,7 +334,8 @@ try:
     all_source_verses = get_all_verses(client,source_bible)
     if source_bible != target_bible:
         all_target_verses = get_all_verses(client,target_bible)
-        num_target_verses = len(all_target_verses)
+    else:
+        all_target_verses = all_source_verses
     end_time = time.time()
     elapsed_time = end_time - start_time 
     print(f"Elapsed time for getting all verses: {elapsed_time:.2f} seconds")
@@ -377,22 +386,25 @@ try:
     print(f"Found verse number: {target_verse_num}. Elapsed time: {elapsed_time:.2f} seconds")
 
     start_time = time.time()
-    print(f"Finding most distinct verses in target book {target_book}")
-    for i in range(num_source_verses):
-        v = source_verses[i]
+    print(f"Finding most distinct verses in target book: {target_book}")
+    for i in range(num_target_verses):
+        if isopenorclose(i,num_target_verses):
+            #print(f"Skipping {i}")
+            continue
+        v = target_verses[i]
         #print(f"{i}-th source verse: {verse_string(v)}") 
         # compute distinctness as distance + weight_complexity * complexity, 
         # where complexity measures the variance of the vecctor
         vector = get_vector(v.uuid)
-        if source_verse_num+i >= len(all_source_verses):
-            print(f"Source verse {source_verse_num+i} greater than number of source verses {len(all_source_verses)}")
+        if target_verse_num+i >= len(all_target_verses):
+            print(f"Target verse {target_verse_num+i} greater than number of target verses {len(all_target_verses)}")
             break 
-        distinctness = compute_distance(source_verse_num+i,target_verse_num,num_target_verses,distance_matrix) 
+        distinctness = compute_distance(target_verse_num+i,source_verse_num,num_source_verses,distance_matrix) 
         distinctness += WEIGHT_COMPLEXITY * normalize_and_scale_complexity(np.var(vector))
         distinctnesses[v.uuid] = distinctness
         complexities[v.uuid] = normalize_and_scale_complexity(np.var(vector))
 
-    most_distinct = top_10_percent_subhash(distinctnesses)
+    most_distinct = top_20_percent_subhash(distinctnesses)
     end_time = time.time()
     elapsed_time = end_time - start_time  # Calculate elapsed time
     print(f"Found most distinct verses in target book {target_book}. Elapsed time: {elapsed_time:.2f} seconds")

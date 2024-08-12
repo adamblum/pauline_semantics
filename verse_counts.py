@@ -32,7 +32,7 @@ if (len(sys.argv)>1):
 client = weaviate.connect_to_wcs(
         cluster_url = WEAVIATE_SERVER,  
         auth_credentials=weaviate.auth.AuthApiKey(os.getenv("WCD_API_KEY"))
-    )
+    
 
 try:
   collection = client.collections.get("Verse")
