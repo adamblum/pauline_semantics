@@ -39,6 +39,7 @@ def get_verses(client,book,source_bible="NKJV"):
     )
     #print(f"Response {response}")
     sorted_verses = sorted(response.objects, key=lambda x: (get_book_index(x.properties["book"]), int(x.properties["chapter"]), int(x.properties["verse"])))
+    #print(f"First verse {sorted_verses[0]}")
     return sorted_verses
 
 # List of books in the correct order
@@ -372,7 +373,6 @@ try:
     num_source_verses = len(source_verses)
     target_verses = get_verses(client,target_book,target_bible)
     num_target_verses = len(target_verses)
-    print(f"First source verse {verse_string(source_verses[0])}")
     source_verse_num = verse_number(source_verses[0],all_source_verses)
     if source_verse_num < 0:
         print(f"Can't find source verse {source_verses[0]}. Stopping.")

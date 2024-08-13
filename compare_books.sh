@@ -7,3 +7,5 @@ python compare_books_distinctverses.py "$1" "2 Thessalonians"
 python compare_books_distinctverses.py "$1" "1 Timothy"
 python compare_books_distinctverses.py "$1" "2 Timothy"
 python compare_books_distinctverses.py "$1" Titus
+python compare_books_distinctverses.py "$1" "3 Corinthians" NKJV ae
+python compare_books_distinctverses.py "$1" Laodiceans NKJV ae
