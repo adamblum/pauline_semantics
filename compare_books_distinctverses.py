@@ -54,7 +54,7 @@ books_order = [
     '1 Corinthians', '2 Corinthians', 'Galatians', 'Ephesians', 'Philippians',
     'Colossians', '1 Thessalonians', '2 Thessalonians', '1 Timothy', '2 Timothy',
     'Titus', 'Philemon', 'Hebrews', 'James', '1 Peter', '2 Peter', '1 John',
-    '2 John', '3 John', 'Jude', 'Revelation','3 Corinthians','Laodiceans'
+    '2 John', '3 John', 'Jude', 'Revelation','3 Corinthians','Laodiceans','Acts of Paul and Thecla'
 ]
 
 # Function to get the index of a book in the books_order list
@@ -287,7 +287,7 @@ def verse_string(verse_object):
     result = verse_object.properties['book'] + ' ' + verse_object.properties['chapter'] + ' ' + verse_object.properties['verse']
     return result
 
-def normalize_and_scale_complexity(raw_complexity, mean=0.0006505854642018747, std_dev=3.248088534511439e-08, target_mean=5, target_std_dev=2, min_score=0, max_score=10):
+def normalize_and_scale_complexity(raw_complexity, mean=0.0006505854642018747, std_dev=3.248088534511439e-08, target_mean=5, target_std_dev=2, min_score=0, max_score=1):
     # Standardize the raw complexity to have a mean of `mean` and std deviation of `std_dev`
     standardized_complexity = (raw_complexity - mean) / std_dev
     # Scale to the desired range with a target mean and std deviation
@@ -299,7 +299,7 @@ def normalize_and_scale_complexity(raw_complexity, mean=0.0006505854642018747, s
 WEAVIATE_SERVER=os.environ['WEAVIATE_CLUSTER']
 results_dir = "./analysis/"
 distinct_scores_file = results_dir + "distinct_scores.csv"
-WEIGHT_COMPLEXITY=0.005
+WEIGHT_COMPLEXITY=0.05
 
 client = weaviate.connect_to_wcs(
         cluster_url = WEAVIATE_SERVER,  
